@@ -1,6 +1,5 @@
 // routes/auth.js
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const db = require('../db');
 const router = express.Router();
 
@@ -25,7 +24,7 @@ router.post('/login', async (req, res) => {
     }
 
     const usuario = rows[0];
-    const senhaOk = await bcrypt.compare(senha, usuario.senha);
+    const senhaOk = (senha === usuario.senha);
     if (!senhaOk) {
       return res.json({ sucesso: false, mensagem: 'Senha incorreta.' });
     }
