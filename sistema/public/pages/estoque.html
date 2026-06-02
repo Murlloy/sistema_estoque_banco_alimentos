@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestão de Estoque — Banco de Alimentos</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .page-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .tab { padding: 0.5rem 1.1rem; border-radius: 7px; border: 1px solid var(--cinza-borda); background: white; cursor: pointer; font-size: 0.88rem; font-family: 'DM Sans', sans-serif; color: var(--texto-fraco); transition: all 0.18s; }
+    .tab.ativo { background: var(--verde); color: white; border-color: var(--verde); }
+    .secao { display: none; }
+    .secao.ativa { display: block; }
+    .estoque-linha { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .percentual { font-size: 0.75rem; color: var(--texto-fraco); }
+    .historico-tipo { font-weight: 600; }
+    .historico-tipo.entrada { color: var(--verde); }
+    .historico-tipo.saida { color: var(--vermelho); }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand"><span>🌾</span> Banco de Alimentos</div>
+    <div class="navbar-right">
+      <span class="navbar-usuario">Olá, <strong id="nomeUsuario">...</strong></span>
+      <a href="/" class="nav-link">🏠 Início</a>
+      <a href="/cadastro" class="nav-link">📦 Produtos</a>
+      <a href="/estoque" class="nav-link ativo">📊 Estoque</a>
+      <button class="btn-logout" onclick="window.location.href='/logout'">Sair</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h2 style="margin-bottom:1.25rem;font-size:1.4rem">📊 Gestão de Estoque</h2>
+
+    <div class="page-tabs">
+      <button class="tab ativo" onclick="trocarTab('estoque')">Estoque Atual</button>
+      <button class="tab" onclick="trocarTab('historico')">Histórico de Movimentações</button>
+    </div>
+
+    <!-- ABA ESTOQUE -->
+    <div class="secao ativa" id="secaoEstoque">
+      <div id="alertaGlobal" class="alerta alerta-aviso" style="margin-bottom:1rem"></div>
+
+      <div class="card">
+        <div class="tabela-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Categoria</th>
+                <th>Estoque Atual</th>
+                <th>Mínimo</th>
+                <th>Status</th>
+                <th>Movimentar</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyEstoque">
+              <tr><td colspan="6"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ABA HISTÓRICO -->
+    <div class="secao" id="secaoHistorico">
+      <div class="card">
+        <div class="tabela-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Produto</th>
+                <th>Tipo</th>
+                <th>Quantidade</th>
+                <th>Responsável</th>
+                <th>Observação</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyHistorico">
+              <tr><td colspan="6"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL MOVIMENTAÇÃO -->
+  <div class="modal-overlay" id="modalMovimento">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-header">
+        <h3>Registrar Movimentação</h3>
+        <button class="btn-fechar" onclick="fecharModal()">×</button>
+      </div>
+      <div id="modalAlerta" class="alerta alerta-aviso"></div>
+
+      <p style="font-size:0.85rem;color:var(--texto-fraco);margin-bottom:1rem">
+        Produto: <strong id="nomeProdutoModal">—</strong> &nbsp;|&nbsp; Estoque atual: <strong id="estoqueAtualModal">—</strong>
+      </p>
+      <input type="hidden" id="movProdutoId">
+      <input type="hidden" id="movUnidade">
+
+      <div class="form-grid">
+        <div class="form-grupo">
+          <label>Tipo de Movimentação *</label>
+          <select id="movTipo">
+            <option value="">Selecione...</option>
+            <option value="entrada">📥 Entrada</option>
+            <option value="saida">📤 Saída</option>
+          </select>
+        </div>
+        <div class="form-grupo">
+          <label>Data da Movimentação *</label>
+          <input type="date" id="movData">
+        </div>
+        <div class="form-grupo full">
+          <label>Quantidade *</label>
+          <input type="number" id="movQtd" placeholder="0" step="0.001" min="0.001" id="movQtd">
+        </div>
+        <div class="form-grupo full">
+          <label>Observação</label>
+          <input type="text" id="movObs" placeholder="Ex: Doação empresa ABC">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secundario" onclick="fecharModal()">Cancelar</button>
+        <button class="btn btn-primario" onclick="registrarMovimento()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ALERTA ESTOQUE MÍNIMO -->
+  <div class="modal-overlay" id="modalAlertaMinimo">
+    <div class="modal" style="max-width:420px;text-align:center">
+      <div style="font-size:3rem;margin-bottom:1rem">⚠️</div>
+      <h3 style="color:var(--vermelho);margin-bottom:0.75rem">Estoque Abaixo do Mínimo!</h3>
+      <p id="textoAlertaMinimo" style="font-size:0.9rem;color:var(--texto-fraco)"></p>
+      <div class="modal-footer" style="justify-content:center;margin-top:1.5rem">
+        <button class="btn btn-aviso" onclick="fecharAlertaMinimo()">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function trocarTab(tab) {
+      document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('ativo', ['estoque','historico'][i] === tab));
+      document.getElementById('secaoEstoque').classList.toggle('ativa', tab === 'estoque');
+      document.getElementById('secaoHistorico').classList.toggle('ativa', tab === 'historico');
+      if (tab === 'historico') carregarHistorico();
+    }
+
+    async function init() {
+      const r = await fetch('/api/usuario/me');
+      const u = await r.json();
+      if (!u.sucesso) { window.location.href = '/login'; return; }
+      document.getElementById('nomeUsuario').textContent = u.usuario.nome.split(' ')[0];
+      carregarEstoque();
+    }
+
+    async function carregarEstoque() {
+      const tbody = document.getElementById('tbodyEstoque');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="spinner"></div></td></tr>';
+      const r = await fetch('/api/estoque');
+      const d = await r.json();
+      const lista = d.dados || [];
+
+      // Alertas globais
+      const criticos = lista.filter(p => parseFloat(p.estoque_atual) < parseFloat(p.estoque_minimo));
+      const ag = document.getElementById('alertaGlobal');
+      if (criticos.length > 0) {
+        ag.textContent = `⚠️ ${criticos.length} produto(s) abaixo do estoque mínimo: ${criticos.map(p=>p.nome).join(', ')}`;
+        ag.classList.add('mostrar');
+      } else {
+        ag.classList.remove('mostrar');
+      }
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="vazio"><p>Nenhum produto cadastrado.</p></div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map(p => {
+        const atual = parseFloat(p.estoque_atual);
+        const min = parseFloat(p.estoque_minimo);
+        const pct = min > 0 ? Math.min(100, (atual / (min * 2)) * 100) : 100;
+        const cor = atual < min ? 'var(--vermelho)' : atual < min * 1.3 ? 'var(--laranja)' : 'var(--verde-claro)';
+        const badge = atual < min ? 'badge-vermelho' : 'badge-verde';
+        const statusTxt = atual < min ? '⚠️ Abaixo' : '✅ OK';
+
+        return `
+          <tr>
+            <td><strong>${p.nome}</strong></td>
+            <td>${p.categoria_nome}</td>
+            <td>
+              <div>
+                <strong>${atual.toLocaleString('pt-BR')}</strong> ${p.unidade_medida}
+                <div class="estoque-bar">
+                  <div class="estoque-bar-fill" style="width:${pct}%;background:${cor}"></div>
+                </div>
+              </div>
+            </td>
+            <td>${min.toLocaleString('pt-BR')} ${p.unidade_medida}</td>
+            <td><span class="badge ${badge}">${statusTxt}</span></td>
+            <td>
+              <button class="btn btn-primario btn-sm" onclick="abrirModal(${p.id},'${p.nome.replace(/'/g,"\\'")}',${atual},'${p.unidade_medida}')">
+                ± Movimentar
+              </button>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    async function carregarHistorico() {
+      const tbody = document.getElementById('tbodyHistorico');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="spinner"></div></td></tr>';
+      const r = await fetch('/api/estoque/historico');
+      const d = await r.json();
+      const lista = d.dados || [];
+
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="vazio"><p>Nenhuma movimentação registrada.</p></div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lista.map(m => {
+        const data = new Date(m.data_movimentacao).toLocaleDateString('pt-BR');
+        const qtd = parseFloat(m.quantidade).toLocaleString('pt-BR');
+        const tipoClass = m.tipo === 'entrada' ? 'entrada' : 'saida';
+        const tipoTxt = m.tipo === 'entrada' ? '📥 Entrada' : '📤 Saída';
+        return `
+          <tr>
+            <td>${data}</td>
+            <td>${m.produto_nome}</td>
+            <td><span class="historico-tipo ${tipoClass}">${tipoTxt}</span></td>
+            <td>${qtd}</td>
+            <td>${m.usuario_nome}</td>
+            <td>${m.observacao || '—'}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    function abrirModal(id, nome, estoqueAtual, unidade) {
+      document.getElementById('movProdutoId').value = id;
+      document.getElementById('movUnidade').value = unidade;
+      document.getElementById('nomeProdutoModal').textContent = nome;
+      document.getElementById('estoqueAtualModal').textContent = `${estoqueAtual.toLocaleString('pt-BR')} ${unidade}`;
+      document.getElementById('movTipo').value = '';
+      document.getElementById('movData').value = new Date().toISOString().split('T')[0];
+      document.getElementById('movQtd').value = '';
+      document.getElementById('movObs').value = '';
+      ocultarAlertaModal();
+      document.getElementById('modalMovimento').classList.add('aberto');
+    }
+
+    function fecharModal() {
+      document.getElementById('modalMovimento').classList.remove('aberto');
+    }
+
+    function mostrarAlertaModal(msg) {
+      const el = document.getElementById('modalAlerta');
+      el.textContent = msg; el.className = 'alerta alerta-erro mostrar';
+    }
+    function ocultarAlertaModal() {
+      document.getElementById('modalAlerta').className = 'alerta alerta-aviso';
+    }
+
+    async function registrarMovimento() {
+      const produto_id = document.getElementById('movProdutoId').value;
+      const tipo = document.getElementById('movTipo').value;
+      const data_movimentacao = document.getElementById('movData').value;
+      const quantidade = document.getElementById('movQtd').value;
+      const observacao = document.getElementById('movObs').value.trim();
+
+      if (!tipo) return mostrarAlertaModal('Selecione o tipo de movimentação.');
+      if (!data_movimentacao) return mostrarAlertaModal('Informe a data da movimentação.');
+      if (!quantidade || parseFloat(quantidade) <= 0) return mostrarAlertaModal('Informe uma quantidade válida.');
+
+      const r = await fetch('/api/estoque/movimentar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ produto_id, tipo, quantidade, data_movimentacao, observacao })
+      });
+      const d = await r.json();
+
+      if (d.sucesso) {
+        fecharModal();
+        carregarEstoque();
+        if (d.alerta) {
+          document.getElementById('textoAlertaMinimo').textContent = d.alerta;
+          document.getElementById('modalAlertaMinimo').classList.add('aberto');
+        }
+      } else {
+        mostrarAlertaModal(d.mensagem);
+      }
+    }
+
+    function fecharAlertaMinimo() {
+      document.getElementById('modalAlertaMinimo').classList.remove('aberto');
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Banco de Alimentos</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 60%, #52b788 100%);
+    }
+    .login-wrap {
+      width: 100%;
+      max-width: 400px;
+      padding: 1rem;
+    }
+    .login-card {
+      background: white;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .login-logo {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+    .login-logo .icone {
+      font-size: 3rem;
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+    .login-logo h1 {
+      font-size: 1.3rem;
+      color: var(--verde);
+    }
+    .login-logo p {
+      font-size: 0.82rem;
+      color: var(--texto-fraco);
+      margin-top: 0.2rem;
+    }
+    .form-grupo { margin-bottom: 1rem; }
+    .login-btn {
+      width: 100%;
+      padding: 0.7rem;
+      font-size: 0.95rem;
+      margin-top: 0.5rem;
+      justify-content: center;
+    }
+    .login-dica {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.78rem;
+      color: var(--texto-fraco);
+      background: var(--cinza-bg);
+      border-radius: 6px;
+      padding: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <span class="icone">🌾</span>
+        <h1>Banco de Alimentos</h1>
+        <p>Sistema de Controle de Estoque</p>
+      </div>
+
+      <div id="alerta" class="alerta alerta-erro"></div>
+
+      <div class="form-grupo">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" placeholder="seu@email.com" autocomplete="email">
+      </div>
+      <div class="form-grupo">
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" placeholder="••••••••" autocomplete="current-password">
+      </div>
+
+      <button class="btn btn-primario login-btn" onclick="fazerLogin()">Entrar</button>
+
+      <div class="login-dica">
+        <strong>Demo:</strong> admin@estoque.com / admin123
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const emailInput = document.getElementById('email');
+    const senhaInput = document.getElementById('senha');
+
+    [emailInput, senhaInput].forEach(el => {
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') fazerLogin(); });
+    });
+
+    function mostrarAlerta(msg) {
+      const el = document.getElementById('alerta');
+      el.textContent = msg;
+      el.classList.add('mostrar');
+      setTimeout(() => el.classList.remove('mostrar'), 5000);
+    }
+
+    async function fazerLogin() {
+      const email = emailInput.value.trim();
+      const senha = senhaInput.value;
+
+      if (!email || !senha) {
+        mostrarAlerta('Preencha e-mail e senha.');
+        return;
+      }
+
+      const btn = document.querySelector('.login-btn');
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+
+      try {
+        const resp = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, senha })
+        });
+        const data = await resp.json();
+
+        if (data.sucesso) {
+          window.location.href = '/';
+        } else {
+          mostrarAlerta(data.mensagem || 'Falha na autenticação.');
+          senhaInput.value = '';
+          senhaInput.focus();
+        }
+      } catch {
+        mostrarAlerta('Erro de conexão com o servidor.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
+    }
+  </script>
+</body>
+</html>

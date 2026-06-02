@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Banco de Alimentos</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .boas-vindas { margin-bottom: 2rem; }
+    .boas-vindas h2 { font-size: 1.6rem; }
+    .boas-vindas p { color: var(--texto-fraco); margin-top: 0.25rem; }
+    .atalhos { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; max-width: 600px; margin-top: 2rem; }
+    .atalho-card {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem 1.5rem;
+      border: 1px solid var(--cinza-borda);
+      box-shadow: var(--sombra);
+      text-decoration: none;
+      color: var(--texto);
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .atalho-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.12); border-color: var(--verde-claro); }
+    .atalho-card .icon { font-size: 2.2rem; }
+    .atalho-card h3 { font-size: 1rem; }
+    .atalho-card p { font-size: 0.82rem; color: var(--texto-fraco); }
+    .alertas-secao { margin-top: 2rem; }
+    .alertas-secao h3 { font-size: 1rem; margin-bottom: 1rem; font-family: 'Syne', sans-serif; }
+    .alerta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      font-size: 0.88rem;
+    }
+    .alerta-item.critico { background: #fce8e9; color: var(--vermelho); border: 1px solid #f5c6c8; }
+    .alerta-item.aviso { background: #fdf0e0; color: #9a5000; border: 1px solid #f5d59b; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand"><span>🌾</span> Banco de Alimentos</div>
+    <div class="navbar-right">
+      <span class="navbar-usuario">Olá, <strong id="nomeUsuario">...</strong></span>
+      <a href="/cadastro" class="nav-link">📦 Produtos</a>
+      <a href="/estoque" class="nav-link">📊 Estoque</a>
+      <button class="btn-logout" onclick="window.location.href='/logout'">Sair</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="boas-vindas">
+      <h2 id="tituloBV">Bem-vindo ao Sistema!</h2>
+      <p>Painel de controle do almoxarifado</p>
+    </div>
+
+    <div class="stat-grid" id="statGrid">
+      <div class="stat-card"><div class="valor" id="statTotal">—</div><div class="label">Produtos cadastrados</div></div>
+      <div class="stat-card"><div class="valor" id="statAbaixo" style="color:var(--vermelho)">—</div><div class="label">Abaixo do estoque mínimo</div></div>
+      <div class="stat-card"><div class="valor" id="statCategorias">—</div><div class="label">Categorias</div></div>
+    </div>
+
+    <div class="atalhos">
+      <a href="/cadastro" class="atalho-card">
+        <span class="icon">📦</span>
+        <h3>Cadastro de Produtos</h3>
+        <p>Adicionar, editar e remover produtos do sistema</p>
+      </a>
+      <a href="/estoque" class="atalho-card">
+        <span class="icon">📊</span>
+        <h3>Gestão de Estoque</h3>
+        <p>Registrar entradas e saídas, ver histórico</p>
+      </a>
+    </div>
+
+    <div class="alertas-secao">
+      <h3>⚠️ Alertas de Estoque</h3>
+      <div id="alertasEstoque"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      // Busca usuário
+      const r = await fetch('/api/usuario/me');
+      const u = await r.json();
+      if (!u.sucesso) { window.location.href = '/login'; return; }
+      document.getElementById('nomeUsuario').textContent = u.usuario.nome.split(' ')[0];
+      document.getElementById('tituloBV').textContent = `Bem-vindo, ${u.usuario.nome.split(' ')[0]}! 👋`;
+
+      // Busca produtos
+      const rp = await fetch('/api/produtos');
+      const dp = await rp.json();
+      const produtos = dp.dados || [];
+      const abaixo = produtos.filter(p => parseFloat(p.estoque_atual) < parseFloat(p.estoque_minimo));
+      const categorias = [...new Set(produtos.map(p => p.categoria_id))].length;
+
+      document.getElementById('statTotal').textContent = produtos.length;
+      document.getElementById('statAbaixo').textContent = abaixo.length;
+      document.getElementById('statCategorias').textContent = categorias;
+
+      // Alertas
+      const container = document.getElementById('alertasEstoque');
+      if (abaixo.length === 0) {
+        container.innerHTML = `<div class="alerta-item aviso">✅ Todos os produtos estão acima do estoque mínimo.</div>`;
+      } else {
+        container.innerHTML = abaixo.map(p => `
+          <div class="alerta-item critico">
+            ⚠️ <strong>${p.nome}</strong> — Atual: ${p.estoque_atual} ${p.unidade_medida} | Mínimo: ${p.estoque_minimo} ${p.unidade_medida}
+          </div>`).join('');
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

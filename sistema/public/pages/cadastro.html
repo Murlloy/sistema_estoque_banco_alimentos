@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastro de Produtos — Banco de Alimentos</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: gap; gap: 1rem; }
+    .page-header h2 { font-size: 1.4rem; }
+    .busca-wrap { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .busca-wrap input { flex: 1; }
+    .acoes-td { display: flex; gap: 0.4rem; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-brand"><span>🌾</span> Banco de Alimentos</div>
+    <div class="navbar-right">
+      <span class="navbar-usuario">Olá, <strong id="nomeUsuario">...</strong></span>
+      <a href="/" class="nav-link">🏠 Início</a>
+      <a href="/cadastro" class="nav-link ativo">📦 Produtos</a>
+      <a href="/estoque" class="nav-link">📊 Estoque</a>
+      <button class="btn-logout" onclick="window.location.href='/logout'">Sair</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h2>📦 Cadastro de Produtos</h2>
+      <button class="btn btn-primario" onclick="abrirModalNovo()">+ Novo Produto</button>
+    </div>
+
+    <div class="card">
+      <div class="busca-wrap">
+        <input type="text" id="campoBusca" placeholder="Buscar por nome ou categoria..." onkeydown="if(event.key==='Enter')buscar()">
+        <button class="btn btn-secundario" onclick="buscar()">🔍 Buscar</button>
+        <button class="btn btn-secundario" onclick="limparBusca()">✕</button>
+      </div>
+
+      <div id="alertaMensagem" class="alerta"></div>
+
+      <div class="tabela-wrap">
+        <table id="tabelaProdutos">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Categoria</th>
+              <th>Unidade</th>
+              <th>Estoque Atual</th>
+              <th>Estoque Mín.</th>
+              <th>Validade</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyProdutos">
+            <tr><td colspan="8"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL NOVO/EDITAR -->
+  <div class="modal-overlay" id="modalProduto">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalTitulo">Novo Produto</h3>
+        <button class="btn-fechar" onclick="fecharModal()">×</button>
+      </div>
+      <div id="modalAlerta" class="alerta alerta-erro"></div>
+      <input type="hidden" id="produtoId">
+      <div class="form-grid">
+        <div class="form-grupo full">
+          <label>Nome do Produto *</label>
+          <input type="text" id="fNome" placeholder="Ex: Arroz Branco 5kg">
+        </div>
+        <div class="form-grupo">
+          <label>Categoria *</label>
+          <select id="fCategoria"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-grupo">
+          <label>Unidade de Medida *</label>
+          <input type="text" id="fUnidade" placeholder="Ex: kg, litro, unidade">
+        </div>
+        <div class="form-grupo">
+          <label>Peso / Volume</label>
+          <input type="number" id="fPeso" placeholder="Ex: 5" step="0.001" min="0">
+        </div>
+        <div class="form-grupo">
+          <label>Data de Validade</label>
+          <input type="date" id="fValidade">
+        </div>
+        <div class="form-grupo">
+          <label>Estoque Atual</label>
+          <input type="number" id="fEstoqueAtual" placeholder="0" step="0.001" min="0" value="0">
+        </div>
+        <div class="form-grupo">
+          <label>Estoque Mínimo *</label>
+          <input type="number" id="fEstoqueMin" placeholder="0" step="0.001" min="0" value="0">
+        </div>
+        <div class="form-grupo full">
+          <label>Condição de Armazenamento</label>
+          <input type="text" id="fCondicao" placeholder="Ex: Local seco e arejado">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secundario" onclick="fecharModal()">Cancelar</button>
+        <button class="btn btn-primario" id="btnSalvar" onclick="salvarProduto()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIRMAR EXCLUSÃO -->
+  <div class="modal-overlay" id="modalExcluir">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h3>Confirmar Exclusão</h3>
+        <button class="btn-fechar" onclick="fecharModalExcluir()">×</button>
+      </div>
+      <p style="font-size:0.9rem;color:var(--texto-fraco)">Tem certeza que deseja excluir o produto <strong id="nomeExcluir"></strong>? Esta ação não pode ser desfeita.</p>
+      <div class="modal-footer">
+        <button class="btn btn-secundario" onclick="fecharModalExcluir()">Cancelar</button>
+        <button class="btn btn-perigo" onclick="confirmarExclusao()">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let categorias = [];
+    let idParaExcluir = null;
+
+    async function init() {
+      const r = await fetch('/api/usuario/me');
+      const u = await r.json();
+      if (!u.sucesso) { window.location.href = '/login'; return; }
+      document.getElementById('nomeUsuario').textContent = u.usuario.nome.split(' ')[0];
+
+      const rc = await fetch('/api/categorias');
+      const dc = await rc.json();
+      categorias = dc.dados || [];
+      const sel = document.getElementById('fCategoria');
+      categorias.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.nome;
+        sel.appendChild(opt);
+      });
+
+      carregarProdutos();
+    }
+
+    async function carregarProdutos(busca = '') {
+      const tbody = document.getElementById('tbodyProdutos');
+      tbody.innerHTML = '<tr><td colspan="8"><div class="spinner"></div></td></tr>';
+      const url = busca ? `/api/produtos?busca=${encodeURIComponent(busca)}` : '/api/produtos';
+      const r = await fetch(url);
+      const d = await r.json();
+      renderTabela(d.dados || []);
+    }
+
+    function renderTabela(lista) {
+      const tbody = document.getElementById('tbodyProdutos');
+      if (lista.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8"><div class="vazio"><p>Nenhum produto encontrado.</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = lista.map(p => {
+        const abaixo = parseFloat(p.estoque_atual) < parseFloat(p.estoque_minimo);
+        const status = abaixo
+          ? '<span class="badge badge-vermelho">Abaixo do mínimo</span>'
+          : '<span class="badge badge-verde">OK</span>';
+        const validade = p.data_validade ? new Date(p.data_validade).toLocaleDateString('pt-BR') : '—';
+        return `
+          <tr>
+            <td><strong>${p.nome}</strong></td>
+            <td>${p.categoria_nome}</td>
+            <td>${p.unidade_medida}</td>
+            <td>${parseFloat(p.estoque_atual).toLocaleString('pt-BR')}</td>
+            <td>${parseFloat(p.estoque_minimo).toLocaleString('pt-BR')}</td>
+            <td>${validade}</td>
+            <td>${status}</td>
+            <td>
+              <div class="acoes-td">
+                <button class="btn btn-secundario btn-sm" onclick="abrirEditar(${p.id})">✏️ Editar</button>
+                <button class="btn btn-perigo btn-sm" onclick="pedirExclusao(${p.id},'${p.nome.replace(/'/g,"\\'")}')">🗑️</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    function buscar() {
+      const t = document.getElementById('campoBusca').value.trim();
+      carregarProdutos(t);
+    }
+
+    function limparBusca() {
+      document.getElementById('campoBusca').value = '';
+      carregarProdutos();
+    }
+
+    function abrirModalNovo() {
+      document.getElementById('modalTitulo').textContent = 'Novo Produto';
+      document.getElementById('btnSalvar').textContent = 'Cadastrar';
+      limparFormulario();
+      document.getElementById('modalProduto').classList.add('aberto');
+    }
+
+    async function abrirEditar(id) {
+      const r = await fetch(`/api/produtos/${id}`);
+      const d = await r.json();
+      const p = d.dados;
+      document.getElementById('modalTitulo').textContent = 'Editar Produto';
+      document.getElementById('btnSalvar').textContent = 'Salvar Alterações';
+      document.getElementById('produtoId').value = p.id;
+      document.getElementById('fNome').value = p.nome;
+      document.getElementById('fCategoria').value = p.categoria_id;
+      document.getElementById('fUnidade').value = p.unidade_medida;
+      document.getElementById('fPeso').value = p.peso_volume || '';
+      document.getElementById('fValidade').value = p.data_validade ? p.data_validade.split('T')[0] : '';
+      document.getElementById('fEstoqueAtual').value = p.estoque_atual;
+      document.getElementById('fEstoqueMin').value = p.estoque_minimo;
+      document.getElementById('fCondicao').value = p.condicao_armazenamento || '';
+      document.getElementById('modalProduto').classList.add('aberto');
+    }
+
+    function fecharModal() {
+      document.getElementById('modalProduto').classList.remove('aberto');
+      limparFormulario();
+    }
+
+    function limparFormulario() {
+      ['produtoId','fNome','fPeso','fValidade','fCondicao'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fCategoria').value = '';
+      document.getElementById('fUnidade').value = '';
+      document.getElementById('fEstoqueAtual').value = '0';
+      document.getElementById('fEstoqueMin').value = '0';
+      ocultarAlertaModal();
+    }
+
+    function mostrarAlertaModal(msg) {
+      const el = document.getElementById('modalAlerta');
+      el.textContent = msg; el.className = 'alerta alerta-erro mostrar';
+    }
+    function ocultarAlertaModal() {
+      document.getElementById('modalAlerta').className = 'alerta';
+    }
+
+    async function salvarProduto() {
+      const id = document.getElementById('produtoId').value;
+      const nome = document.getElementById('fNome').value.trim();
+      const categoria_id = document.getElementById('fCategoria').value;
+      const unidade_medida = document.getElementById('fUnidade').value.trim();
+      const peso_volume = document.getElementById('fPeso').value;
+      const data_validade = document.getElementById('fValidade').value;
+      const estoque_atual = document.getElementById('fEstoqueAtual').value;
+      const estoque_minimo = document.getElementById('fEstoqueMin').value;
+      const condicao = document.getElementById('fCondicao').value.trim();
+
+      // Validações
+      if (!nome) return mostrarAlertaModal('Nome é obrigatório.');
+      if (!categoria_id) return mostrarAlertaModal('Selecione uma categoria.');
+      if (!unidade_medida) return mostrarAlertaModal('Unidade de medida é obrigatória.');
+      if (estoque_minimo === '' || isNaN(estoque_minimo) || parseFloat(estoque_minimo) < 0)
+        return mostrarAlertaModal('Estoque mínimo inválido.');
+
+      const payload = { nome, categoria_id, unidade_medida, peso_volume: peso_volume || null,
+        data_validade: data_validade || null, estoque_atual: estoque_atual || 0,
+        estoque_minimo, condicao_armazenamento: condicao || null };
+
+      const url = id ? `/api/produtos/${id}` : '/api/produtos';
+      const method = id ? 'PUT' : 'POST';
+
+      const r = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const d = await r.json();
+
+      if (d.sucesso) {
+        fecharModal();
+        mostrarMensagem(d.mensagem, 'sucesso');
+        carregarProdutos();
+      } else {
+        mostrarAlertaModal(d.mensagem);
+      }
+    }
+
+    function pedirExclusao(id, nome) {
+      idParaExcluir = id;
+      document.getElementById('nomeExcluir').textContent = nome;
+      document.getElementById('modalExcluir').classList.add('aberto');
+    }
+
+    function fecharModalExcluir() {
+      document.getElementById('modalExcluir').classList.remove('aberto');
+      idParaExcluir = null;
+    }
+
+    async function confirmarExclusao() {
+      const r = await fetch(`/api/produtos/${idParaExcluir}`, { method: 'DELETE' });
+      const d = await r.json();
+      fecharModalExcluir();
+      if (d.sucesso) {
+        mostrarMensagem(d.mensagem, 'sucesso');
+        carregarProdutos();
+      } else {
+        mostrarMensagem(d.mensagem, 'erro');
+      }
+    }
+
+    function mostrarMensagem(msg, tipo) {
+      const el = document.getElementById('alertaMensagem');
+      el.textContent = msg;
+      el.className = `alerta alerta-${tipo === 'sucesso' ? 'sucesso' : 'erro'} mostrar`;
+      setTimeout(() => el.className = 'alerta', 4000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
